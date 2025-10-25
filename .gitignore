@@ -1,0 +1,317 @@
+# .gitignore for Universal Data Quality Analyzer
+
+# ==========================================
+# Python
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ==========================================
+# Virtual Environments
+# ==========================================
+analyzer_env/
+cleanlab_env/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+
+# ==========================================
+# IDE and Editors
+# ==========================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ==========================================
+# Data and Datasets
+# ==========================================
+# Raw datasets (too large for git)
+data/
+datasets/
+raw_data/
+*.zip
+*.tar.gz
+*.rar
+
+# Extracted CIFAR-10 data
+cifar10_extracted/
+cifar-10-batches-py/
+
+# Custom datasets
+medical_data/
+satellite_data/
+custom_objects/
+fashion_data/
+
+# Dataset conversion outputs
+*_imagefolder/
+converted_*/
+
+# ==========================================
+# Analysis Reports and Outputs
+# ==========================================
+# Quality analysis reports
+data_quality_reports/
+*_reports/
+*_analysis/
+quality_reports/
+batch_analysis/
+
+# Specific report files
+cleanvision/
+cleanlab/
+*.csv
+*.json
+issue_summary.*
+analysis_metadata.*
+basic_predictions.*
+problematic_samples.*
+
+# Output directories from examples
+cifar10_reports/
+medical_reports/
+large_dataset_reports/
+quick_check/
+initial_assessment/
+final_assessment/
+
+# ==========================================
+# Model Cache and Weights
+# ==========================================
+# Pretrained model cache (large files)
+.cache/
+torch/hub/
+timm_cache/
+huggingface_cache/
+
+# Model weights and checkpoints
+*.pth
+*.pt
+*.ckpt
+*.bin
+outputs/
+checkpoints/
+best_model.*
+trial_best_tmp.*
+
+# ==========================================
+# Logs and Monitoring
+# ==========================================
+logs/
+*.log
+*.out
+*.err
+wandb/
+.neptune/
+mlruns/
+
+# Training logs
+training_logs/
+optuna_logs/
+tensorboard_logs/
+
+# ==========================================
+# Jupyter Notebooks
+# ==========================================
+.ipynb_checkpoints/
+*.ipynb
+
+# ==========================================
+# Configuration and Secrets
+# ==========================================
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# API keys and secrets
+secrets.json
+config.ini
+credentials.json
+
+# Local configuration overrides
+local_config.py
+user_config.yaml
+
+# ==========================================
+# Temporary and Cache Files
+# ==========================================
+tmp/
+temp/
+cache/
+.cache/
+*.tmp
+*.temp
+
+# System cache
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# ==========================================
+# Documentation Build
+# ==========================================
+docs/_build/
+docs/build/
+site/
+
+# ==========================================
+# Operating System
+# ==========================================
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+
+# ==========================================
+# Package Managers
+# ==========================================
+# pip
+pip-log.txt
+pip-delete-this-directory.txt
+
+# conda
+.conda/
+
+# ==========================================
+# Testing
+# ==========================================
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+
+# ==========================================
+# Performance Profiling
+# ==========================================
+*.prof
+*.lprof
+*.pyprof
+
+# ==========================================
+# GPU and CUDA
+# ==========================================
+*.cu.o
+*.gpu
+
+# ==========================================
+# Project Specific
+# ==========================================
+# Large sample datasets for testing
+sample_datasets/
+test_data/
+demo_data/
+
+# Benchmark results
+benchmarks/
+performance_tests/
+
+# User-specific analysis scripts
+my_*.py
+user_*.py
+custom_*.py
+
+# Backup files
+*.bak
+*.backup
+backup_*/
+
+# Experimental outputs
+experiments/
+trials/
+sandbox/
+
+# ==========================================
+# Keep These Files (Use ! to negate)
+# ==========================================
+# Keep example configuration files
+!example_config.yaml
+!sample_config.json
+
+# Keep small demo datasets
+!demo_samples/
+demo_samples/**
+!demo_samples/*.jpg
+
+# Keep documentation assets
+!docs/images/
+!README_assets/
+
+# Keep setup and requirements
+!requirements.txt
+!setup.py
+!setup_offline.py
+
+# Keep example scripts
+!examples/
+examples/**
+!examples/*.py
+
+# ==========================================
+# Optional: Uncomment if needed
+# ==========================================
+# Uncommend if you want to ignore specific file types
+# *.jpg
+# *.jpeg
+# *.png
+# *.bmp
+# *.tiff
+# *.webp
+
+# Uncomment if using specific tools
+# .mypy_cache/
+# .pylint.d/
+# .black/
+# .flake8
+
+# Uncomment for Docker
+# Dockerfile*
+# docker-compose*
+# .dockerignore
