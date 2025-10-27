@@ -14,6 +14,13 @@ import torch
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
 
+# Set multiprocessing start method for macOS compatibility
+import multiprocessing
+try:
+    multiprocessing.set_start_method('spawn', force=True)
+except RuntimeError:
+    pass
+
 # Try different cleanlab imports based on version
 try:
     from cleanlab import Datalab  # cleanlab >= 2.0
@@ -139,10 +146,15 @@ class LocalImageFolder(Dataset):
 def extract_features(backbone, folder, batch=64, device="cpu"):
     """Extract features using pretrained backbone"""
     ds = LocalImageFolder(folder, img_size=224)
-    dl = DataLoader(ds, batch_size=batch, shuffle=False, num_workers=0, pin_memory=True)  # Windows: num_workers=0
+    # Set num_workers=0 for better macOS compatibility
+    dl = DataLoader(ds, batch_size=batch, shuffle=False, num_workers=0, pin_memory=(device=="cuda"))
     
     print(f"Loading backbone: {backbone}")
-    model = timm.create_model(backbone, pretrained=True, num_classes=0).to(device).eval()
+    try:
+        model = timm.create_model(backbone, pretrained=True, num_classes=0).to(device).eval()
+    except Exception as e:
+        print(f"Failed to load {backbone}, falling back to resnet18: {e}")
+        model = timm.create_model("resnet18", pretrained=True, num_classes=0).to(device).eval()
     
     feats, labels, names = [], [], []
     with torch.no_grad():
@@ -173,6 +185,55 @@ def oof_probs(feats, labels, K, splits=3):
     
     return pred
 
+# -------- Download CIFAR-10 --------
+def download_cifar10_if_needed(cifar_dir):
+    """Download CIFAR-10 if not present"""
+    cifar_path = Path(cifar_dir)
+    
+    # Check if CIFAR-10 exists
+    if cifar_path.exists() and (cifar_path / "batches.meta").exists():
+        return str(cifar_path)
+    
+    print(f"CIFAR-10 not found at {cifar_dir}")
+    print("Attempting to download CIFAR-10...")
+    
+    try:
+        import urllib.request
+        import tarfile
+        
+        # Create parent directory
+        cifar_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        cifar_url = "https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz"
+        cifar_file = cifar_path.parent / "cifar-10-python.tar.gz"
+        
+        # Download
+        print(f"📥 Downloading from {cifar_url}...")
+        print("This may take a few minutes...")
+        urllib.request.urlretrieve(cifar_url, cifar_file)
+        
+        # Extract
+        print(f"📂 Extracting...")
+        with tarfile.open(cifar_file, 'r:gz') as tar:
+            tar.extractall(cifar_path.parent)
+        
+        # Clean up tar file
+        cifar_file.unlink()
+        
+        # Verify
+        if (cifar_path / "batches.meta").exists():
+            print(f"✅ CIFAR-10 downloaded and extracted to: {cifar_path}")
+            return str(cifar_path)
+        else:
+            print("❌ Download failed - batches.meta not found")
+            return None
+            
+    except Exception as e:
+        print(f"❌ Failed to download CIFAR-10: {e}")
+        print("Please download manually from: https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz")
+        print(f"Extract to: {cifar_path}")
+        return None
+
 # -------- Main --------
 def main():
     ap = argparse.ArgumentParser()
@@ -180,11 +241,12 @@ def main():
                     help="Path to CIFAR-10 pickle files")
     ap.add_argument("--extract_dir", type=str, default="data/cifar10_extracted", 
                     help="Output directory for extracted images")
-    ap.add_argument("--backbone", type=str, default="vit_tiny_patch16_224",
+    ap.add_argument("--backbone", type=str, default="resnet18",
                     help="Feature extraction backbone")
-    ap.add_argument("--batch", type=int, default=64, help="Batch size for feature extraction")
+    ap.add_argument("--batch", type=int, default=32, help="Batch size for feature extraction")
     ap.add_argument("--out", type=str, default="data_quality_reports", help="Output directory for reports")
     ap.add_argument("--skip-extract", action="store_true", help="Skip extraction if already done")
+    ap.add_argument("--auto-download", action="store_true", help="Automatically download CIFAR-10 if missing")
     args = ap.parse_args()
 
     os.makedirs(args.out, exist_ok=True)
@@ -193,12 +255,26 @@ def main():
     print(f"Cleanlab version: {CLEANLAB_VERSION}")
     print(f"CleanVision available: {CLEANVISION_AVAILABLE}")
 
+    # 0) Download CIFAR-10 if needed
+    if args.auto_download or not Path(args.cifar_dir).exists():
+        cifar_dir = download_cifar10_if_needed(args.cifar_dir)
+        if cifar_dir is None:
+            print("❌ Cannot proceed without CIFAR-10 dataset")
+            print("Run with --auto-download flag or download manually")
+            return
+        args.cifar_dir = cifar_dir
+
     # 1) Extract CIFAR-10 if needed
     train_dir = Path(args.extract_dir) / "train"
     if not args.skip_extract or not train_dir.exists():
         print("== Extracting CIFAR-10 to image folders ==")
-        class_names = extract_cifar10_to_folders(args.cifar_dir, args.extract_dir)
-        print(f"Extracted {len(class_names)} classes: {class_names}")
+        try:
+            class_names = extract_cifar10_to_folders(args.cifar_dir, args.extract_dir)
+            print(f"Extracted {len(class_names)} classes: {class_names}")
+        except FileNotFoundError as e:
+            print(f"❌ CIFAR-10 files not found: {e}")
+            print("Try running with --auto-download flag")
+            return
     else:
         print("== Skipping extraction (already done) ==")
 
@@ -214,14 +290,23 @@ def main():
             
             # Try different save methods based on CleanVision version
             try:
-                imagelab.save(str(cv_out), force=True)  # Newer API with force=True
+                imagelab.save(str(cv_out), force=True)
             except TypeError:
                 try:
-                    imagelab.report(str(cv_out), force=True)  # Older API with force=True
+                    imagelab.report(str(cv_out), force=True)
                 except TypeError:
-                    imagelab.save(str(cv_out))  # Fallback without force
+                    try:
+                        imagelab.save(str(cv_out))
+                    except Exception as save_error:
+                        print(f"CleanVision save failed: {save_error}")
+                        # Create a basic summary instead
+                        issues_summary = imagelab.get_issues()
+                        if issues_summary is not None:
+                            issues_df = pd.DataFrame(issues_summary)
+                            issues_df.to_csv(cv_out / "cleanvision_issues.csv", index=False)
+                            print(f"CleanVision issues saved to CSV: {cv_out}")
             
-            print(f"CleanVision report saved to: {cv_out}")
+            print(f"CleanVision analysis completed")
         except Exception as e:
             print(f"CleanVision failed: {e}")
             print("Continuing with feature extraction...")
@@ -247,10 +332,15 @@ def main():
                 lab = Datalab(data={"features": feats}, label="labels")
                 lab.find_issues(features=feats, labels=labels, pred_probs=probs)
             except Exception:
-                # Method 2: Alternative API
-                data_dict = {"features": feats, "labels": labels}
-                lab = Datalab(data=data_dict, label_name="labels")
-                lab.find_issues(pred_probs=probs)
+                try:
+                    # Method 2: Alternative API
+                    data_dict = {"features": feats, "labels": labels}
+                    lab = Datalab(data=data_dict, label_name="labels")
+                    lab.find_issues(pred_probs=probs)
+                except Exception:
+                    # Method 3: Direct approach
+                    lab = Datalab(data=feats, label=labels)
+                    lab.find_issues(pred_probs=probs)
             
             # Save results
             cl_out = Path(args.out) / "cleanlab"
@@ -264,16 +354,22 @@ def main():
             issues_df["filename"] = names
             issues_df["class_name"] = [classes[label] for label in labels]
             
-            # Save full report
-            issues_df.to_csv(cl_out / "cleanlab_issues_full.csv", index=False)
-            
-            # Save compact report (most important columns)
-            important_cols = ["filename", "class_name"] + [col for col in issues_df.columns 
-                             if any(keyword in col for keyword in ["label", "outlier", "near_duplicate", "_score"])]
-            
-            if important_cols:
-                compact_df = issues_df[important_cols]
-                compact_df.to_csv(cl_out / "cleanlab_issues_compact.csv", index=False)
+            # Save with error handling
+            try:
+                issues_df.to_csv(cl_out / "cleanlab_issues_full.csv", index=False)
+                
+                # Save compact report
+                important_cols = ["filename", "class_name"] + [col for col in issues_df.columns 
+                                 if any(keyword in col for keyword in ["label", "outlier", "near_duplicate", "_score"])]
+                
+                if important_cols:
+                    compact_df = issues_df[important_cols]
+                    compact_df.to_csv(cl_out / "cleanlab_issues_compact.csv", index=False)
+                
+                print(f"Cleanlab report saved to: {cl_out}")
+            except PermissionError:
+                print("Warning: Could not save CSV files - they may be open in another program")
+                print("Close Excel/CSV viewers and run again")
             
             # Print summary
             print(f"\nCleanlab report saved to: {cl_out}")
